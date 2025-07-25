@@ -42,7 +42,6 @@ export async function GET(req: NextRequest) {
     }
 
     // Find existing task session
-    // @ts-ignore - Prisma client types not updated yet
     const taskSession = await prisma.taskSession.findFirst({
       where: { userId: dbUser.id }
     });

@@ -48,7 +48,6 @@ export async function POST(req: NextRequest) {
 
     // Find existing task session or create new one
     console.log('Looking for task session for user:', dbUser.id);
-    // @ts-ignore - Prisma client types not updated yet
     let taskSession = await prisma.taskSession.findFirst({
       where: { userId: dbUser.id }
     });
@@ -57,7 +56,6 @@ export async function POST(req: NextRequest) {
     if (taskSession) {
       // Update existing session
       console.log('Updating existing task session');
-      // @ts-ignore - Prisma client types not updated yet
       taskSession = await prisma.taskSession.update({
         where: { id: taskSession.id },
         data: {
@@ -73,7 +71,6 @@ export async function POST(req: NextRequest) {
     } else {
       // Create new session
       console.log('Creating new task session');
-      // @ts-ignore - Prisma client types not updated yet
       taskSession = await prisma.taskSession.create({
         data: {
           userId: dbUser.id,
