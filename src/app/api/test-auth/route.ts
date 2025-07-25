@@ -10,7 +10,7 @@ export async function GET() {
   };
 
   const missingVars = Object.entries(envCheck)
-    .filter(([_, exists]) => !exists)
+    .filter(([, exists]) => !exists)
     .map(([key]) => key);
 
   return NextResponse.json({

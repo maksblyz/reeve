@@ -10,7 +10,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const router = useRouter();
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +50,7 @@ export default function Login() {
       } else {
         setError("Login failed. Please check your credentials.");
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred");
     } finally {
       setLoading(false);
@@ -61,7 +61,7 @@ export default function Login() {
     <main className="min-h-screen bg-white flex flex-col items-center justify-center">
       <div className="w-full max-w-sm space-y-6">
                   <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900">Sign In</h1>
+            <h1 className="text-4xl font-light tracking-wide text-gray-900" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>Sign In</h1>
             <p className="text-gray-700 mt-2 font-medium">Welcome back</p>
           </div>
 
@@ -111,7 +111,7 @@ export default function Login() {
 
         <div className="text-center">
           <p className="text-base text-gray-700 font-medium">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link href="/signup" className="font-medium text-black hover:underline">
               Sign up
             </Link>

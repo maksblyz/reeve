@@ -10,7 +10,7 @@ export default function SignUp() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const router = useRouter();
+
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +61,7 @@ export default function SignUp() {
           }, 3000);
         }
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred");
     } finally {
       setLoading(false);

@@ -26,6 +26,44 @@ export default function Page() {
   // Check if all tasks are completed
   const allTasksCompleted = tasks.every(task => task.done);
 
+  const chargeUser = async () => {
+    setCharging(true);
+    try {
+      // Get the current session from Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.error('No session found');
+        setChargeResult('No session found');
+        return;
+      }
+
+      const response = await fetch("/api/charge-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ amount: price }),
+      });
+
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        console.log(`Successfully charged $${price}`);
+        setChargeResult(`Charged $${price} successfully!`);
+      } else {
+        console.error('Payment failed:', result.error);
+        setChargeResult(`Payment failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error charging user:', error);
+      setChargeResult('Payment error occurred');
+    } finally {
+      setCharging(false);
+    }
+  };
+
   // countdown
   useEffect(() => {
     if (!locked || remaining <= 0) return;
@@ -40,7 +78,7 @@ export default function Page() {
       });
     }, 1000);
     return () => clearInterval(iv);
-  }, [locked, remaining]);
+  }, [locked, remaining, chargeUser]);
 
   // reset when all tasks are completed
   useEffect(() => {
@@ -88,44 +126,6 @@ export default function Page() {
     setRemaining(TWELVE_HOURS_SEC);
   };
 
-  const chargeUser = async () => {
-    setCharging(true);
-    try {
-      // Get the current session from Supabase
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        console.error('No session found');
-        setChargeResult('No session found');
-        return;
-      }
-
-      const response = await fetch("/api/charge-user", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ amount: price }),
-      });
-
-      const result = await response.json();
-      
-      if (response.ok && result.success) {
-        console.log(`Successfully charged $${price}`);
-        setChargeResult(`Charged $${price} successfully!`);
-      } else {
-        console.error('Payment failed:', result.error);
-        setChargeResult(`Payment failed: ${result.error}`);
-      }
-    } catch (error) {
-      console.error('Error charging user:', error);
-      setChargeResult('Payment error occurred');
-    } finally {
-      setCharging(false);
-    }
-  };
-
   const reset = () => {
     setTasks(Array.from({ length: MAX }, (_, i) => ({ id: i + 1, text: "", done: false})));
     setVisible(1);
@@ -135,7 +135,7 @@ export default function Page() {
   };
 
   return (
-    <main className="min-h-screen bg-white text-black flex flex-col items-center test-style">
+    <main className="min-h-screen bg-white text-black flex flex-col items-center">
       {/* header with logo, timer, and profile */}
       <div className="fixed top-4 left-4 right-4 flex justify-between items-start">
         <h1 className="text-xl font-light tracking-wide text-gray-900" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>reeve</h1>

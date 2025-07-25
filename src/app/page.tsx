@@ -40,7 +40,7 @@ export default function Landing() {
             <h1 className="text-4xl font-light tracking-wide text-gray-900" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>reeve</h1>
           </div>
           
-          <div className="space-y-3">
+          <div className="space-y-3 pt-8">
           <AnimatePresence>
             {tasks.slice(0, visible).map((t, i) => (
               <motion.div
