@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 
 interface Task {
@@ -23,9 +23,13 @@ export default function Page() {
   const [isResetting, setIsResetting] = useState<boolean>(false);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
   const [lockTime, setLockTime] = useState<Date | null>(null);
+  const [setupMessage, setSetupMessage] = useState<string>("");
+  const [setupMessageVisible, setSetupMessageVisible] = useState<boolean>(false);
 
-  // Check if all tasks are completed
-  const allTasksCompleted = tasks.every(task => task.done);
+  // Check if all visible non-empty tasks are completed
+  const visibleTasks = tasks.slice(0, visible);
+  const nonEmptyTasks = visibleTasks.filter(task => task.text.trim());
+  const allTasksCompleted = nonEmptyTasks.length > 0 && nonEmptyTasks.every(task => task.done);
 
   // Function to save task state to database
   const saveTaskState = async (tasks: Task[], visible: number, locked: boolean, remaining: number, price: number, lockTime: Date | null) => {
@@ -92,6 +96,71 @@ export default function Page() {
       } else {
         localStorage.removeItem('reeve-lockTime');
       }
+    }
+  };
+
+  // Check for setup success/cancelled messages and verify payment method
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const setupStatus = urlParams.get('setup');
+    
+    if (setupStatus === 'success') {
+      setSetupMessage('Payment method added successfully!');
+      setSetupMessageVisible(true);
+      // Clear the URL parameter
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Hide message after 3 seconds
+      setTimeout(() => {
+        setSetupMessageVisible(false);
+        setTimeout(() => setSetupMessage(''), 300); // Remove from DOM after fade
+      }, 3000);
+    } else if (setupStatus === 'cancelled') {
+      setSetupMessage('Payment setup was cancelled.');
+      setSetupMessageVisible(true);
+      // Clear the URL parameter
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Hide message after 3 seconds
+      setTimeout(() => {
+        setSetupMessageVisible(false);
+        setTimeout(() => setSetupMessage(''), 300); // Remove from DOM after fade
+      }, 3000);
+    } else {
+      // Check if user has a payment method, if not, redirect to setup
+      checkPaymentMethod();
+    }
+  }, []);
+
+  const checkPaymentMethod = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const response = await fetch("/api/check-payment-method", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (!data.hasPaymentMethod) {
+          // Redirect to setup session
+          const setupResponse = await fetch("/api/create-setup-session", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${session.access_token}`,
+            },
+          });
+
+          if (setupResponse.ok) {
+            const { url } = await setupResponse.json();
+            window.location.href = url;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking payment method:', error);
     }
   };
 
@@ -182,7 +251,7 @@ export default function Page() {
     loadTaskState();
   }, []);
 
-  const chargeUser = async () => {
+  const chargeUser = useCallback(async () => {
     setCharging(true);
     try {
       // Get the current session from Supabase
@@ -218,7 +287,7 @@ export default function Page() {
     } finally {
       setCharging(false);
     }
-  };
+  }, [price]);
 
   // countdown
   useEffect(() => {
@@ -297,6 +366,13 @@ export default function Page() {
 
   const lock = () => {
     if (locked) return;
+    
+    // Check if there are any non-empty tasks
+    const hasNonEmptyTasks = tasks.slice(0, visible).some(task => task.text.trim());
+    if (!hasNonEmptyTasks) {
+      return; // Don't lock if there are no tasks with content
+    }
+    
     const newLockTime = new Date();
     setLocked(true);
     setRemaining(TWELVE_HOURS_SEC);
@@ -304,7 +380,7 @@ export default function Page() {
     saveTaskState(tasks, visible, true, TWELVE_HOURS_SEC, price, newLockTime);
   };
 
-  const reset = () => {
+  const reset = useCallback(() => {
     const newTasks = Array.from({ length: MAX }, (_, i) => ({ id: i + 1, text: "", done: false}));
     setTasks(newTasks);
     setVisible(1);
@@ -315,7 +391,7 @@ export default function Page() {
     
     // Save reset state to database
     saveTaskState(newTasks, 1, false, TWELVE_HOURS_SEC, 10, null);
-  };
+  }, []);
 
   // Don't render until data is loaded
   if (!isLoaded) {
@@ -329,7 +405,7 @@ export default function Page() {
   return (
     <main className="min-h-screen bg-white text-black flex flex-col items-center">
       {/* header with logo, timer, and profile */}
-      <div className="fixed top-4 left-4 right-4 flex justify-between items-start">
+      <div className="fixed top-4 left-4 right-4 flex justify-between items-start z-20">
         <h1 className="text-xl font-light tracking-wide text-gray-900" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>reeve</h1>
         
         {locked && (
@@ -348,61 +424,92 @@ export default function Page() {
           </div>
         )}
         
-        <div className="text-xl font-light tracking-wide text-gray-900" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>profile</div>
+        <button 
+          onClick={() => window.location.href = '/profile'}
+          className="text-xl font-light tracking-wide text-gray-900 hover:text-gray-700 transition-colors"
+          style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}
+        >
+          profile
+        </button>
       </div>
 
       {/* central block */}
-      <div className="flex-1 w-full flex flex-col items-center justify-center">
+      <div className="flex-1 w-full flex flex-col items-center justify-center relative">
+        {/* Setup message overlay */}
+        {setupMessage && (
+          <div className="absolute top-0 left-0 right-0 z-10 text-center py-4">
+            <div className={`text-sm font-medium transition-opacity duration-300 ${
+              setupMessage.includes('successfully') ? 'text-green-600' : 'text-yellow-600'
+            } ${setupMessageVisible ? 'opacity-100' : 'opacity-0'}`}>
+              {setupMessage}
+            </div>
+          </div>
+        )}
+        
         <div className="w-full max-w-sm space-y-3">
           {isResetting && (
             <div className="text-center py-4">
               <div className="text-sm text-green-600 font-medium">Tasks completed! Resetting</div>
             </div>
           )}
-          {Array.from({ length: visible }).map((_, i) => (
-            <div key={i} className="flex items-center">
-              {/* checkbox */}
-              <button
-                onClick={() => toggleDone(i)}
-                disabled={isResetting}
-                className={`h-5 w-5 rounded border flex items-center justify-center mr-2 ${
-                  tasks[i].done
-                    ? "bg-black text-white border-black"
-                    : "border-gray-400"
-                } ${isResetting ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {tasks[i].done && (
-                  <svg
-                    className="w-3 h-3"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                )}
-              </button>
-              <label className="text-sm mr-2 w-6 text-right">{i + 1}.</label>
-              <input
-                className="flex-1 border-b border-gray-300 focus:outline-none text-sm disabled:bg-transparent"
-                value={tasks[i].text}
-                onChange={(e) => updateText(i, e.target.value)}
-                onKeyDown={onEnter}
-                disabled={locked || isResetting}
-                autoFocus={i === visible - 1 && !locked && !isResetting}
-              />
-            </div>
-          ))}
+          {Array.from({ length: visible }).map((_, i) => {
+            // Hide empty tasks when locked
+            if (locked && !tasks[i].text.trim()) {
+              return null;
+            }
+            
+            return (
+              <div key={i} className="flex items-center">
+                {/* checkbox */}
+                <button
+                  onClick={() => toggleDone(i)}
+                  disabled={isResetting}
+                  className={`h-5 w-5 rounded border flex items-center justify-center mr-2 ${
+                    tasks[i].done
+                      ? "bg-black text-white border-black"
+                      : "border-gray-400"
+                  } ${isResetting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {tasks[i].done && (
+                    <svg
+                      className="w-3 h-3"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  )}
+                </button>
+                <label className="text-sm mr-2 w-6 text-right">{i + 1}.</label>
+                <input
+                  className="flex-1 border-b border-gray-300 focus:outline-none text-sm disabled:bg-transparent"
+                  value={tasks[i].text}
+                  onChange={(e) => updateText(i, e.target.value)}
+                  onKeyDown={onEnter}
+                  disabled={locked || isResetting}
+                  autoFocus={i === visible - 1 && !locked && !isResetting}
+                />
+              </div>
+            );
+          })}
           
           {/* lock button and price input */}
           <div className="pt-8 flex justify-center">
-            {!locked ? (
-              <div className="flex items-center space-x-4">
+            <div className="relative flex justify-center">
+              {/* Price input - slides out when locked */}
+              <div 
+                className={`flex items-center space-x-4 transition-all duration-500 ease-in-out ${
+                  locked 
+                    ? 'opacity-0 -translate-x-4 pointer-events-none' 
+                    : 'opacity-100 translate-x-0'
+                }`}
+              >
                 <div className="flex items-center">
                   <span className="text-base font-medium text-gray-900 mr-2">$</span>
                   <input
@@ -419,9 +526,9 @@ export default function Page() {
                 </div>
                 <button
                   onClick={lock}
-                  disabled={isResetting}
+                  disabled={isResetting || !tasks.slice(0, visible).some(task => task.text.trim())}
                   className={`px-4 py-2 text-base font-medium border border-black rounded transition ${
-                    isResetting 
+                    isResetting || !tasks.slice(0, visible).some(task => task.text.trim())
                       ? 'opacity-50 cursor-not-allowed' 
                       : 'hover:bg-black hover:text-white'
                   }`}
@@ -429,11 +536,20 @@ export default function Page() {
                   Lock
                 </button>
               </div>
-            ) : (
-              <div className="px-6 py-2 text-base font-medium border border-gray-300 rounded bg-gray-100 text-gray-600">
-                ${price}
+              
+              {/* Locked price display - slides in when locked */}
+              <div 
+                className={`absolute top-0 transition-all duration-500 ease-in-out ${
+                  locked 
+                    ? 'opacity-100 translate-x-0' 
+                    : 'opacity-0 translate-x-4 pointer-events-none'
+                }`}
+              >
+                <div className="px-6 py-2 text-base font-medium border border-gray-300 rounded bg-gray-100 text-gray-600">
+                  ${price}
+                </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>

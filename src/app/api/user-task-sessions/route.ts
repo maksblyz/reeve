@@ -1,0 +1,56 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { createServerClient } from "@/lib/supabase";
+
+export async function GET(req: NextRequest) {
+  console.log('User task sessions endpoint called');
+  try {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({
+        error: 'Authorization header missing or invalid. Please sign in again.'
+      }, { status: 401 });
+    }
+
+    const token = authHeader.substring(7);
+    const supabase = createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json({
+        error: 'Invalid or expired token. Please sign in again.'
+      }, { status: 401 });
+    }
+
+    let dbUser = await prisma.user.findUnique({
+      where: { email: user.email! }
+    });
+
+    if (!dbUser) {
+      console.log('Creating new user in database:', user.email);
+      dbUser = await prisma.user.create({
+        data: {
+          email: user.email!,
+        }
+      });
+      console.log('User created:', dbUser.id);
+    }
+
+    const taskSessions = await prisma.taskSession.findMany({
+      where: { userId: dbUser.id },
+      orderBy: { created_at: 'desc' }
+    });
+
+    console.log('Found task sessions:', taskSessions.length);
+    return NextResponse.json({
+      taskSessions
+    });
+
+  } catch (error) {
+    console.error('Error fetching task sessions:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch task sessions. Please try again.' },
+      { status: 500 }
+    );
+  }
+} 
