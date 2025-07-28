@@ -54,35 +54,22 @@ export default function ProfilePage() {
     return { days, countsByDate };
   }, [taskSessions]);
 
-  // Generate calendar grid with proper week alignment
+  // Generate calendar grid with fixed layout
   const calendarGrid = useMemo(() => {
     if (days.length === 0) return [];
     
-    const firstDay = days[0];
-    const firstDayOfWeek = firstDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    
     const grid: (Date | null)[][] = [];
-    let currentWeek: (Date | null)[] = [];
     
-    // Pad the first week with nulls until the first day aligns with its weekday
-    for (let i = 0; i < firstDayOfWeek; i++) {
-      currentWeek.push(null);
-    }
-    
-    // Add all days
-    days.forEach(day => {
-      currentWeek.push(day);
-      
-      if (currentWeek.length === 7) {
-        grid.push([...currentWeek]);
-        currentWeek = [];
-      }
-    });
-    
-    // Pad the last week if needed
-    if (currentWeek.length > 0) {
-      while (currentWeek.length < 7) {
-        currentWeek.push(null);
+    // Create exactly 4 weeks with 7 days each
+    for (let week = 0; week < 4; week++) {
+      const currentWeek: (Date | null)[] = [];
+      for (let day = 0; day < 7; day++) {
+        const dayIndex = week * 7 + day;
+        if (dayIndex < days.length) {
+          currentWeek.push(days[dayIndex]);
+        } else {
+          currentWeek.push(null);
+        }
       }
       grid.push(currentWeek);
     }
